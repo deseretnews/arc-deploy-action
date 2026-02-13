@@ -23297,8 +23297,8 @@ var require_current_versions = __commonJS({
         const urlLive = `https://${apiHostname}/deployments/fusion/live`;
         const responseLive = await client.get(urlLive);
         responseBodyLive = await responseLive.readBody();
-        const { liveId } = JSON.parse(responseBodyLive);
-        const onDeckLambdas = lambdas.filter((service) => service.Version !== liveId);
+        const { live } = JSON.parse(responseBodyLive);
+        const onDeckLambdas = lambdas.filter((service) => service.Version !== live);
         return onDeckLambdas.map(({ Version }) => parseInt(Version)).sort((a, b) => a - b);
       } catch (error) {
         if (error.name === "SyntaxError") {
@@ -23457,6 +23457,47 @@ var require_deploy_version = __commonJS({
   }
 });
 
+// src/phases/clean-versions.cjs
+var require_clean_versions = __commonJS({
+  "src/phases/clean-versions.cjs"(exports2, module2) {
+    var cleanupOldVersions2 = async ({ core: core2, client, apiHostname, bundleName }, deleteBundle = false) => {
+      try {
+        const response = await client.get(`https://${apiHostname}/deployments/fusion/services`);
+        const { lambdas } = JSON.parse(await response.readBody());
+        const deployedVersion = lambdas.find(
+          (service) => service.Environment.Variables.BUNDLE_NAME === bundleName
+        );
+        if (!deployedVersion) {
+          core2.info(`No running deployment found for bundle "${bundleName}". Skipping terminate.`);
+        } else {
+          const isLive = deployedVersion.Aliases.some((alias) => alias.Name === "live");
+          if (isLive) {
+            core2.info(`Bundle "${bundleName}" is the live deployment (version ${deployedVersion.Version}). Skipping terminate.`);
+          } else {
+            core2.info(`Terminating deployment version ${deployedVersion.Version} for bundle "${bundleName}"`);
+            try {
+              await client.post(`https://${apiHostname}/deployments/fusion/services/${deployedVersion.Version}/terminate`);
+            } catch (err) {
+              core2.warning(`Failed to terminate version ${deployedVersion.Version}: ${err.message}`);
+            }
+          }
+        }
+        if (deleteBundle) {
+          core2.info(`Deleting bundle "${bundleName}"`);
+          try {
+            await client.post(`https://${apiHostname}/deployments/fusion/bundles/${encodeURI(bundleName)}/delete`);
+          } catch (err) {
+            core2.warning(`Failed to delete bundle "${bundleName}": ${err.message}`);
+          }
+        }
+      } catch (error) {
+        core2.setFailed(`Cleanup failed: ${error.message}`);
+      }
+    };
+    module2.exports = { cleanupOldVersions: cleanupOldVersions2 };
+  }
+});
+
 // src/index.cjs
 var core = require_core();
 var github = require_github();
@@ -23466,6 +23507,7 @@ var { uploadArtifact } = require_upload();
 var { terminateOldestVersion } = require_terminate_oldest();
 var { promoteNewVersion } = require_promote_version();
 var { deployLatestVersion } = require_deploy_version();
+var { cleanupOldVersions } = require_clean_versions();
 var {
   verifyMinimumRunningVersions,
   verifyArcHost,
@@ -23519,6 +23561,12 @@ var main = async () => {
   }
   const oldestVersion = currentVersions[0];
   const latestVersion = currentVersions[currentVersions.length - 1];
+  if (runContext.context.eventName === "pull_request") {
+    core.info("Pull request was merged. will try to clean up old versions");
+    const deleteBundle = runContext.context.payload.pull_request.merged === true;
+    await cleanupOldVersions(runContext, deleteBundle);
+    return;
+  }
   await uploadArtifact(runContext);
   if (runContext.shouldDeploy) {
     await deployLatestVersion(runContext);
