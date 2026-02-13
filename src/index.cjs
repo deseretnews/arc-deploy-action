@@ -66,12 +66,13 @@ const main = async () => {
   const currentVersions = await getCurrentVersions(runContext)
   core.debug('currentVersions', JSON.stringify(currentVersions, undefined, 2))
 
-  if (!Array.isArray(currentVersions) || !currentVersions.length) {
-    return core.setFailed('Unable to determine current versions.')
-  }
+  let oldestVersion = null;
+  let latestVersion = null;
 
-  const oldestVersion = currentVersions[0]
-  const latestVersion = currentVersions[currentVersions.length - 1]
+  if (Array.isArray(currentVersions) && currentVersions.length) {
+    oldestVersion = currentVersions[0]
+    latestVersion = currentVersions[currentVersions.length - 1]
+  }
 
   if (runContext.context.eventName === 'pull_request') {
     core.info('Pull request was merged. will try to clean up old versions')
@@ -86,7 +87,7 @@ const main = async () => {
     await deployLatestVersion(runContext)
 
     // Don't terminate if there aren't more versions than one.
-    if (currentVersions.length > runContext.minimumRunningVersions) {
+    if (oldestVersion && currentVersions && (currentVersions.length > runContext.minimumRunningVersions)) {
       const termResults = terminateOldestVersion(runContext, oldestVersion)
       core.debug(
         'terminateOldestVersionResults',
@@ -94,32 +95,33 @@ const main = async () => {
       )
     }
 
-    let retriesRemaining = runContext.retryCount
-
-    let newestVersion = undefined
-    // Wait for the internal deployer to do its thing.
-    while (retriesRemaining >= 0) {
-      const newVersions = await getCurrentVersions(runContext)
-      core.debug(`New versions: ${JSON.stringify(newVersions, undefined, 2)}`)
-      if (!!newVersions && newVersions[newVersions.length - 1] !== latestVersion) {
-        newestVersion = newVersions[newVersions.length - 1]
-        break
+    if (latestVersion) {
+      let retriesRemaining = runContext.retryCount
+      let newestVersion = undefined
+      // Wait for the internal deployer to do its thing.
+      while (retriesRemaining >= 0) {
+        const newVersions = await getCurrentVersions(runContext)
+        core.debug(`New versions: ${JSON.stringify(newVersions, undefined, 2)}`)
+        if (!!newVersions && newVersions[newVersions.length - 1] !== latestVersion) {
+          newestVersion = newVersions[newVersions.length - 1]
+          break
+        }
+        await retryDelayWait()
+        retriesRemaining -= 1
       }
-      await retryDelayWait()
-      retriesRemaining -= 1
-    }
 
-    // If we didn't identify the new version, that means we timed out. Boo.
-    if (!newestVersion) {
-      return core.setFailed(
-        `We retried ${runContext.retryCount} times with ${runContext.retryDelay} seconds between retries. Unfortunately, the new version does not appear to have deployed successfully. Please check logs, and contact support if this problem continues.\n\nYou may wish to retry this action again, but with debugging enabled.`,
-      )
-    }
+      // If we didn't identify the new version, that means we timed out. Boo.
+      if (!newestVersion) {
+        return core.setFailed(
+          `We retried ${runContext.retryCount} times with ${runContext.retryDelay} seconds between retries. Unfortunately, the new version does not appear to have deployed successfully. Please check logs, and contact support if this problem continues.\n\nYou may wish to retry this action again, but with debugging enabled.`,
+        )
+      }
 
-    runContext.newestVersion = newestVersion
-  }
-  if (runContext.shouldPromote) {
-    await promoteNewVersion(runContext)
+      runContext.newestVersion = newestVersion
+      if (runContext.shouldPromote) {
+        await promoteNewVersion(runContext)
+      }
+    }
   }
 }
 
