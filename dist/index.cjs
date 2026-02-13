@@ -23563,10 +23563,13 @@ var main = async () => {
     latestVersion = currentVersions[currentVersions.length - 1];
   }
   if (runContext.context.eventName === "pull_request") {
-    core.info("Pull request was merged. will try to clean up old versions");
+    core.info("Pull request. will try to clean up old versions");
     const deleteBundle = runContext.context.payload.pull_request.merged === true;
+    core.info(`Pull request ${deleteBundle ? "merged" : "closed without merge"}. Will ${deleteBundle ? "" : "not "}try to delete bundle.`);
     await cleanupOldVersions(runContext, deleteBundle);
-    return;
+    if (deleteBundle) {
+      return core.info("Pull request merged. Bundle cleanup completed. skipping upload, deploy, and promote steps.");
+    }
   }
   await uploadArtifact(runContext);
   if (runContext.shouldDeploy) {
