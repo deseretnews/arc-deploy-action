@@ -7,6 +7,7 @@ const { uploadArtifact } = require('./phases/upload.cjs')
 const { terminateOldestVersion } = require('./phases/terminate-oldest.cjs')
 const { promoteNewVersion } = require('./phases/promote-version.cjs')
 const { deployLatestVersion } = require('./phases/deploy-version.cjs')
+const { cleanupOldVersions } = require('./phases/clean-versions.cjs')
 const {
   verifyMinimumRunningVersions,
   verifyArcHost,
@@ -71,6 +72,13 @@ const main = async () => {
 
   const oldestVersion = currentVersions[0]
   const latestVersion = currentVersions[currentVersions.length - 1]
+
+  if (runContext.context.eventName === 'pull_request') {
+    core.info('Pull request was merged. will try to clean up old versions')
+    const deleteBundle = runContext.context.payload.pull_request.merged === true
+    await cleanupOldVersions(runContext, deleteBundle)
+    return
+  }
 
   await uploadArtifact(runContext)
 

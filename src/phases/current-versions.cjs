@@ -14,9 +14,9 @@ const getCurrentVersions = async ({ core, client, apiHostname }) => {
     const responseLive = await client.get(urlLive)
 
     responseBodyLive = await responseLive.readBody()
-    const { liveId } = JSON.parse(responseBodyLive)
+    const { live } = JSON.parse(responseBodyLive)
 
-    const onDeckLambdas = lambdas.filter((service) => service.Version !== liveId)
+    const onDeckLambdas = lambdas.filter((service) => service.Version !== live)
 
     return onDeckLambdas.map(({ Version }) => parseInt(Version)).sort((a,b)=> a - b)
   } catch (error) {
