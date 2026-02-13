@@ -23353,13 +23353,15 @@ var require_upload = __commonJS({
       artifact,
       bundleName,
       apiHostname,
-      apiKey
+      apiKey,
+      forceOverwrite = false
     }) => {
       await verifyArtifact({ core: core2, artifact });
       try {
         const url = `https://${apiHostname}/deployments/fusion/bundles`;
         const formData = new FormData();
         formData.append("name", bundleName);
+        formData.append("force", forceOverwrite);
         formData.append("bundle", new Blob([readFileSync(artifact)]), {
           contentType: "application/zip",
           name: "bundle",
@@ -23475,6 +23477,7 @@ var runContext = {
   apiKey: core.getInput("api-key"),
   apiHostname: core.getInput("api-hostname"),
   bundlePrefix: core.getInput("bundle-prefix"),
+  bundleName: core.getInput("bundle-name"),
   pagebuilderVersion: core.getInput("pagebuilder-version"),
   artifact: core.getInput("artifact"),
   retryCount: core.getInput("retry-count"),
@@ -23485,14 +23488,19 @@ var runContext = {
   client: new HttpClient("nodejs - GitHub Actions - arcxp/deploy-action", [], {
     headers: { Authorization: `Bearer ${core.getInput("api-key")}` }
   }),
+  forceOverwrite: false,
   core
 };
-runContext.bundleName = [
-  runContext.bundlePrefix ?? "bundle",
-  (/* @__PURE__ */ new Date()).getTime(),
-  runContext.context.ref_name,
-  runContext.context.sha
-].join("-");
+if (!runContext.bundleName) {
+  runContext.bundleName = [
+    runContext.bundlePrefix ?? "bundle",
+    (/* @__PURE__ */ new Date()).getTime(),
+    runContext.context.ref_name,
+    runContext.context.sha
+  ].join("-");
+} else {
+  runContext.forceOverwrite = true;
+}
 var retryDelayWait = () => new Promise((res) => setTimeout(() => res(), runContext.retryDelay * 1e3));
 var main = async () => {
   verifyMinimumRunningVersions(runContext);
