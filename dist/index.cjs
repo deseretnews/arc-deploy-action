@@ -23556,11 +23556,12 @@ var main = async () => {
   }
   const currentVersions = await getCurrentVersions(runContext);
   core.debug("currentVersions", JSON.stringify(currentVersions, void 0, 2));
-  if (!Array.isArray(currentVersions) || !currentVersions.length) {
-    return core.setFailed("Unable to determine current versions.");
+  let oldestVersion = null;
+  let latestVersion = null;
+  if (Array.isArray(currentVersions) && currentVersions.length) {
+    oldestVersion = currentVersions[0];
+    latestVersion = currentVersions[currentVersions.length - 1];
   }
-  const oldestVersion = currentVersions[0];
-  const latestVersion = currentVersions[currentVersions.length - 1];
   if (runContext.context.eventName === "pull_request") {
     core.info("Pull request was merged. will try to clean up old versions");
     const deleteBundle = runContext.context.payload.pull_request.merged === true;
@@ -23570,36 +23571,38 @@ var main = async () => {
   await uploadArtifact(runContext);
   if (runContext.shouldDeploy) {
     await deployLatestVersion(runContext);
-    if (currentVersions.length > runContext.minimumRunningVersions) {
+    if (oldestVersion && currentVersions && currentVersions.length > runContext.minimumRunningVersions) {
       const termResults = terminateOldestVersion(runContext, oldestVersion);
       core.debug(
         "terminateOldestVersionResults",
         JSON.stringify(termResults, void 0, 2)
       );
     }
-    let retriesRemaining = runContext.retryCount;
-    let newestVersion = void 0;
-    while (retriesRemaining >= 0) {
-      const newVersions = await getCurrentVersions(runContext);
-      core.debug(`New versions: ${JSON.stringify(newVersions, void 0, 2)}`);
-      if (!!newVersions && newVersions[newVersions.length - 1] !== latestVersion) {
-        newestVersion = newVersions[newVersions.length - 1];
-        break;
+    if (latestVersion) {
+      let retriesRemaining = runContext.retryCount;
+      let newestVersion = void 0;
+      while (retriesRemaining >= 0) {
+        const newVersions = await getCurrentVersions(runContext);
+        core.debug(`New versions: ${JSON.stringify(newVersions, void 0, 2)}`);
+        if (!!newVersions && newVersions[newVersions.length - 1] !== latestVersion) {
+          newestVersion = newVersions[newVersions.length - 1];
+          break;
+        }
+        await retryDelayWait();
+        retriesRemaining -= 1;
       }
-      await retryDelayWait();
-      retriesRemaining -= 1;
-    }
-    if (!newestVersion) {
-      return core.setFailed(
-        `We retried ${runContext.retryCount} times with ${runContext.retryDelay} seconds between retries. Unfortunately, the new version does not appear to have deployed successfully. Please check logs, and contact support if this problem continues.
+      if (!newestVersion) {
+        return core.setFailed(
+          `We retried ${runContext.retryCount} times with ${runContext.retryDelay} seconds between retries. Unfortunately, the new version does not appear to have deployed successfully. Please check logs, and contact support if this problem continues.
 
 You may wish to retry this action again, but with debugging enabled.`
-      );
+        );
+      }
+      runContext.newestVersion = newestVersion;
+      if (runContext.shouldPromote) {
+        await promoteNewVersion(runContext);
+      }
     }
-    runContext.newestVersion = newestVersion;
-  }
-  if (runContext.shouldPromote) {
-    await promoteNewVersion(runContext);
   }
 };
 main().finally(() => core.debug("Finished."));
