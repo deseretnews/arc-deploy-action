@@ -25,7 +25,7 @@ inputs:
     default: 'latest'
   bundle-prefix:
     description: 'The prefix for the bundle name, which is used to identify the bundle in the Arc XP UI'
-    required: true
+    required: false
   bundle-name:
     description: 'The name of the bundle. If not provided, a name will be generated using the bundle prefix and other information.'
     required: false

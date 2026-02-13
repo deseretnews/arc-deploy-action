@@ -23501,6 +23501,9 @@ if (!runContext.bundleName) {
 } else {
   runContext.forceOverwrite = true;
 }
+if (!runContext.bundlePrefix && !runContext.bundleName) {
+  return core.setFailed("You must provide either a bundle prefix or a bundle name.");
+}
 var retryDelayWait = () => new Promise((res) => setTimeout(() => res(), runContext.retryDelay * 1e3));
 var main = async () => {
   verifyMinimumRunningVersions(runContext);

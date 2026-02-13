@@ -45,6 +45,10 @@ if (!runContext.bundleName) {
   runContext.forceOverwrite = true
 }
 
+if (!runContext.bundlePrefix && !runContext.bundleName) {
+  return core.setFailed('You must provide either a bundle prefix or a bundle name.')
+}
+
 const retryDelayWait = () =>
   new Promise((res) => setTimeout(() => res(), runContext.retryDelay * 1000))
 
