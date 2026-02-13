@@ -26,6 +26,9 @@ inputs:
   bundle-prefix:
     description: 'The prefix for the bundle name, which is used to identify the bundle in the Arc XP UI'
     required: true
+  bundle-name:
+    description: 'The name of the bundle. If not provided, a name will be generated using the bundle prefix and other information.'
+    required: false
   artifact:
     description: 'The artifact to be uploaded to Arc XP PageBuilder'
     required: true

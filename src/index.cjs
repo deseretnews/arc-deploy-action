@@ -19,6 +19,7 @@ const runContext = {
   apiKey: core.getInput('api-key'),
   apiHostname: core.getInput('api-hostname'),
   bundlePrefix: core.getInput('bundle-prefix'),
+  bundleName: core.getInput('bundle-name'),
   pagebuilderVersion: core.getInput('pagebuilder-version'),
   artifact: core.getInput('artifact'),
   retryCount: core.getInput('retry-count'),
@@ -29,16 +30,20 @@ const runContext = {
   client: new HttpClient('nodejs - GitHub Actions - arcxp/deploy-action', [], {
     headers: { Authorization: `Bearer ${core.getInput('api-key')}` },
   }),
-
+  forceOverwrite: false,
   core,
 }
 
-runContext.bundleName = [
-  runContext.bundlePrefix ?? 'bundle',
-  new Date().getTime(),
-  runContext.context.ref_name,
-  runContext.context.sha,
-].join('-')
+if (!runContext.bundleName) {
+  runContext.bundleName = [
+    runContext.bundlePrefix ?? 'bundle',
+    new Date().getTime(),
+    runContext.context.ref_name,
+    runContext.context.sha,
+  ].join('-')
+} else {
+  runContext.forceOverwrite = true
+}
 
 const retryDelayWait = () =>
   new Promise((res) => setTimeout(() => res(), runContext.retryDelay * 1000))

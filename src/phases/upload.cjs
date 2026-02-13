@@ -19,6 +19,7 @@ const uploadArtifact = async ({
   bundleName,
   apiHostname,
   apiKey,
+  forceOverwrite = false,
 }) => {
   await verifyArtifact({ core, artifact })
 
@@ -27,6 +28,7 @@ const uploadArtifact = async ({
     const url = `https://${apiHostname}/deployments/fusion/bundles`
     const formData = new FormData()
     formData.append('name', bundleName)
+    formData.append('force', forceOverwrite)
     formData.append('bundle', new Blob([readFileSync(artifact)]), {
       contentType: 'application/zip',
       name: 'bundle',
